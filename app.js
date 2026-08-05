@@ -1,8 +1,7 @@
-/**
- * Sistem Catatan Harian BDR (Bekerja Dari Rumah)
- * Dibangunkan untuk: Mohd Azrulnizam Mohd Kamarudin
- * Peranan: Ketua Unit ICT / Pensyarah JTMK
- */
+// Initialize PDF.js worker
+if (typeof pdfjsLib !== 'undefined') {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+}
 
 // Timetable Configuration (Selasa: 2, Khamis: 4)
 const TIMETABLE = {
@@ -1512,9 +1511,12 @@ function handleTimetableUpload(event) {
         const loadingText = document.getElementById("loading-overlay-text");
 
         if (fileName.endsWith('.pdf')) {
-            // PDF is saved as visual reference only (cannot OCR easily in client-side JS without pdf.js canvas render)
-            const reader = new FileReader();
-            reader.onload = (e) => {
+            if (loadingOverlay) loadingOverlay.classList.remove("hidden");
+            if (loadingText) loadingText.innerText = "Membaca Fail PDF...";
+
+            // 1. Save PDF as visual reference (DataURL)
+            const visualReader = new FileReader();
+            visualReader.onload = (e) => {
                 state.visualTimetable = {
                     type: 'pdf',
                     data: e.target.result
@@ -1522,9 +1524,185 @@ function handleTimetableUpload(event) {
                 localStorage.setItem("bdr_visual_timetable", JSON.stringify(state.visualTimetable));
                 updateTimetableStatus();
                 checkVisualTimetableBtn();
-                showToast("Fail PDF jadual waktu berjaya disimpan sebagai rujukan visual!");
+                loadActiveDateLog();
             };
-            reader.readAsDataURL(file);
+            visualReader.readAsDataURL(file);
+
+            // 2. Parse PDF text using PDF.js
+            const bufferReader = new FileReader();
+            bufferReader.onload = async (e) => {
+                try {
+                    const typedarray = new Uint8Array(e.target.result);
+                    const pdf = await pdfjsLib.getDocument(typedarray).promise;
+                    
+                    // We only need the first page for the timetable grid
+                    const page = await pdf.getPage(1);
+                    const textContent = await page.getTextContent();
+                    const items = textContent.items;
+
+                    let yIsnin = null, ySelasa = null, yRabu = null, yKhamis = null, yJumaat = null;
+                    const hoursX = {};
+
+                    // Map days and hours coordinates
+                    items.forEach(item => {
+                        const text = item.str.toLowerCase().trim();
+                        const x = item.transform[4];
+                        const y = item.transform[5];
+
+                        // Match day names
+                        if (text === "isnin" || text.includes("isnin")) yIsnin = y;
+                        else if (text === "selasa" || text.includes("selasa")) ySelasa = y;
+                        else if (text === "rabu" || text.includes("rabu")) yRabu = y;
+                        else if (text === "khamis" || text.includes("khamis")) yKhamis = y;
+                        else if (text === "jumaat" || text.includes("jumaat")) yJumaat = y;
+
+                        // Match hour headers: "8:00", "9:00", etc.
+                        if (/^8[:.]00/.test(text) || text === "8:00" || text === "8.00") hoursX[8] = x;
+                        else if (/^9[:.]00/.test(text) || text === "9:00" || text === "9.00") hoursX[9] = x;
+                        else if (/^10[:.]00/.test(text) || text === "10:00" || text === "10.00") hoursX[10] = x;
+                        else if (/^11[:.]00/.test(text) || text === "11:00" || text === "11.00") hoursX[11] = x;
+                        else if (/^12[:.]00/.test(text) || text === "12:00" || text === "12.00") hoursX[12] = x;
+                        else if (/^1[:.]00/.test(text) || text === "1:00" || text === "1.00") hoursX[13] = x;
+                        else if (/^2[:.]00/.test(text) || text === "2:00" || text === "2.00") hoursX[14] = x;
+                        else if (/^3[:.]00/.test(text) || text === "3:00" || text === "3.00") hoursX[15] = x;
+                        else if (/^4[:.]00/.test(text) || text === "4:00" || text === "4.00") hoursX[16] = x;
+                        else if (/^5[:.]00/.test(text) || text === "5:00" || text === "5.00") hoursX[17] = x;
+                    });
+
+                    // Interpolate for missing hour columns coordinates
+                    const detectedHours = Object.keys(hoursX).map(Number).sort((a,b)=>a-b);
+                    if (detectedHours.length >= 2) {
+                        const firstH = detectedHours[0];
+                        const lastH = detectedHours[detectedHours.length - 1];
+                        const firstX = hoursX[firstH];
+                        const lastX = hoursX[lastH];
+                        const avgWidth = (lastX - firstX) / (lastH - firstH);
+                        for (let h = 8; h <= 17; h++) {
+                            if (hoursX[h] === undefined) {
+                                hoursX[h] = firstX + (h - firstH) * avgWidth;
+                            }
+                        }
+                    } else {
+                        if (loadingOverlay) loadingOverlay.classList.add("hidden");
+                        showToast("Jadual PDF disimpan sebagai rujukan visual (Gagal mengesan grid jam).", "warning");
+                        return;
+                    }
+
+                    // Interpolate Day Y-coordinates (y increases upwards in PDF.js coordinates)
+                    const dayYArray = [yIsnin, ySelasa, yRabu, yKhamis, yJumaat];
+                    const detectedDays = [];
+                    dayYArray.forEach((y, i) => { if (y !== null) detectedDays.push({ index: i + 1, y: y }); });
+
+                    if (detectedDays.length >= 1) {
+                        let avgRowHeight = -70; // Negative row height since y decreases from Isnin down to Jumaat
+                        if (detectedDays.length >= 2) {
+                            const firstD = detectedDays[0];
+                            const lastD = detectedDays[detectedDays.length - 1];
+                            avgRowHeight = (lastD.y - firstD.y) / (lastD.index - firstD.index);
+                        }
+                        const ref = detectedDays[0];
+                        yIsnin = ref.y - (ref.index - 1) * avgRowHeight;
+                        ySelasa = ref.y - (ref.index - 2) * avgRowHeight;
+                        yRabu = ref.y - (ref.index - 3) * avgRowHeight;
+                        yKhamis = ref.y - (ref.index - 4) * avgRowHeight;
+                        yJumaat = ref.y - (ref.index - 5) * avgRowHeight;
+                    } else {
+                        if (loadingOverlay) loadingOverlay.classList.add("hidden");
+                        showToast("Jadual PDF disimpan sebagai rujukan visual (Gagal mengesan grid hari).", "warning");
+                        return;
+                    }
+
+                    const daysY = { 1: yIsnin, 2: ySelasa, 3: yRabu, 4: yKhamis, 5: yJumaat };
+                    const rowHeight = Math.abs(yIsnin - yJumaat) / 4;
+                    const colWidth = (hoursX[17] - hoursX[8]) / 9;
+
+                    // Group text items into cells
+                    const cellGroups = {};
+                    items.forEach(item => {
+                        const text = item.str.trim();
+                        if (!text) return;
+
+                        const x = item.transform[4];
+                        const y = item.transform[5];
+
+                        let dayIndex = null;
+                        for (let d = 1; d <= 5; d++) {
+                            if (Math.abs(y - daysY[d]) < rowHeight * 0.45) {
+                                dayIndex = d;
+                                break;
+                            }
+                        }
+
+                        let hourIndex = null;
+                        for (let h = 8; h <= 16; h++) {
+                            const xStart = hoursX[h];
+                            const xEnd = hoursX[h+1];
+                            if (x >= xStart - colWidth*0.15 && x <= xEnd + colWidth*0.15) {
+                                hourIndex = h;
+                                break;
+                            }
+                        }
+
+                        if (dayIndex && hourIndex) {
+                            const key = `${dayIndex}_${hourIndex}`;
+                            if (!cellGroups[key]) cellGroups[key] = [];
+                            cellGroups[key].push({ text: text, x: x, y: y });
+                        }
+                    });
+
+                    // Reconstruct timetable
+                    const newTimetable = { 1: {}, 2: {}, 3: {}, 4: {}, 5: {} };
+                    let detectedCount = 0;
+
+                    for (let key in cellGroups) {
+                        const [d, h] = key.split("_").map(Number);
+                        
+                        // Sort items in cell left-to-right (by x coordinate)
+                        const cellItems = cellGroups[key].sort((a, b) => a.x - b.x);
+                        let cellText = cellItems.map(item => item.text).join(" ").trim();
+                        cellText = cellText.replace(/\s+/g, ' ');
+
+                        // Course code pattern filter
+                        const hasCourseCode = /[A-Z]{3,4}\d{4,5}/i.test(cellText) || /\bPA\b/i.test(cellText) || /\bPENASIHAT\b/i.test(cellText);
+
+                        if (hasCourseCode) {
+                            const noiseFilter = ["isnin", "selasa", "rabu", "khamis", "jumaat", "8:00", "9:00", "10:00", "11:00", "12:00", "1:00", "2:00", "3:00", "4:00", "5:00", "6:00"];
+                            noiseFilter.forEach(nf => {
+                                const reg = new RegExp("\\b" + nf + "\\b", "gi");
+                                cellText = cellText.replace(reg, "");
+                            });
+                            cellText = cellText.trim();
+
+                            if (cellText.length > 2) {
+                                newTimetable[d][h] = {
+                                    task: "Pelaksanaan Kelas",
+                                    info: cellText
+                                };
+                                detectedCount++;
+                            }
+                        }
+                    }
+
+                    if (loadingOverlay) loadingOverlay.classList.add("hidden");
+
+                    if (detectedCount > 0) {
+                        state.timetable = newTimetable;
+                        localStorage.setItem("bdr_timetable", JSON.stringify(state.timetable));
+                        syncLogsWithActiveTimetable();
+                        updateTimetableStatus();
+                        loadActiveDateLog();
+                        showToast(`Jadual PDF berjaya diimbas! (Dikesan: ${detectedCount} slot kuliah aktif).`);
+                    } else {
+                        showToast("Jadual PDF disimpan sebagai rujukan visual (Teks kelas tidak dapat dipetakan secara automatik).", "warning");
+                    }
+
+                } catch (pdfErr) {
+                    if (loadingOverlay) loadingOverlay.classList.add("hidden");
+                    console.error("PDF Parsing Error:", pdfErr);
+                    showToast("PDF disimpan sebagai rujukan visual (Gagal mengekstrak teks jadual).", "warning");
+                }
+            };
+            bufferReader.readAsArrayBuffer(file);
         } else {
             // Save image as visual reference immediately first
             const reader = new FileReader();
