@@ -6,22 +6,9 @@ if (typeof pdfjsLib !== 'undefined') {
 // Timetable Configuration (Selasa: 2, Khamis: 4)
 const TIMETABLE = {
     // 2 = Selasa (Selasa)
-    2: {
-        8: { task: "Pelaksanaan Kelas", info: "DFC10353 - Programming Fundamentals (DIT1B) [Amali - LAB2]" },
-        9: { task: "Pelaksanaan Kelas", info: "DFC10353 - Programming Fundamentals (DIT1B) [Amali - LAB2]" },
-        12: { task: "Pelaksanaan Kelas", info: "DFX40063 - Server Administration (DIT4, DIT5A, DIT5B) [Kuliah - LAB2]" },
-        15: { task: "Pelaksanaan Kelas", info: "DFX50083 - Python Programming (DIT5A(B), DIT6(B)) [Kuliah - LAB1]" },
-        16: { task: "Pelaksanaan Kelas", info: "DFX50083 - Python Programming (DIT5A(B), DIT6(B)) [Amali - LAB1]" }
-    },
+    2: {},
     // 4 = Khamis (Khamis)
-    4: {
-        8: { task: "Pelaksanaan Kelas", info: "DFX50083 - Python Programming (DIT5A(**)/DIT6(**)) [Amali - LAB3]" },
-        9: { task: "Pelaksanaan Kelas", info: "DFX50083 - Python Programming (DIT5A(**)/DIT6(**)) [Amali - LAB3]" },
-        12: { task: "Pelaksanaan Kelas", info: "DFX40063 - Server Administration (DIT4, DIT5A, DIT5B) [Kuliah - LAB2]" },
-        13: { task: "Pelaksanaan Kelas", info: "DFX40063 - Server Administration (DIT4, DIT5A, DIT5B) [Amali - LAB2]" },
-        15: { task: "Pelaksanaan Kelas", info: "DFX50083 - Python Programming (DIT5B) [Kuliah - TEC2]" },
-        16: { task: "Pelaksanaan Kelas", info: "DFX50083 - Python Programming (DIT5B) [Kuliah - TEC2]" }
-    }
+    4: {}
 };
 
 const DAY_NAMES = {
