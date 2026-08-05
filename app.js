@@ -53,8 +53,7 @@ let state = {
     },
     signature: "", // base64 string
     activeDate: "", // YYYY-MM-DD
-    timetable: {}, // loaded from localstorage or defaulted
-    visualTimetable: { type: "", data: "" } // base64 representation of JPG/PDF
+    timetable: {} // loaded from localstorage or defaulted
 };
 
 // Elements
@@ -169,10 +168,6 @@ function loadLocalStorageData() {
         if (savedStr.includes("DFC20293") || savedStr === '{"1":{},"2":{},"3":{},"4":{},"5":{}}' || Object.keys(state.timetable).length === 0) {
             state.timetable = JSON.parse(JSON.stringify(TIMETABLE));
             localStorage.setItem("bdr_timetable", JSON.stringify(state.timetable));
-            
-            // Padam rujukan jadual visual Fatimah
-            state.visualTimetable = { type: "", data: "" };
-            localStorage.setItem("bdr_visual_timetable", JSON.stringify(state.visualTimetable));
         }
     } else {
         // Fallback to default
@@ -180,16 +175,7 @@ function loadLocalStorageData() {
         localStorage.setItem("bdr_timetable", JSON.stringify(state.timetable));
     }
 
-    // Load visual timetable
-    const savedVisualTimetable = localStorage.getItem("bdr_visual_timetable");
-    if (savedVisualTimetable) {
-        state.visualTimetable = JSON.parse(savedVisualTimetable);
-    } else {
-        state.visualTimetable = { type: "", data: "" };
-    }
-    checkVisualTimetableBtn();
     renderManualGridInputs();
-    
     toggleTimetableSection(state.profile.isLecturer);
     
     const savedSig = localStorage.getItem("bdr_signature");
@@ -302,42 +288,8 @@ function setupEventListeners() {
             state.profile.isLecturer = e.target.checked;
             localStorage.setItem("bdr_profile", JSON.stringify(state.profile));
             toggleTimetableSection(e.target.checked);
-            checkVisualTimetableBtn();
             loadActiveDateLog();
             showToast(e.target.checked ? "Mod Pensyarah diaktifkan!" : "Mod Pensyarah dinyahaktifkan!");
-        });
-    }
-
-    // Timetable CSV file input listener
-    const timetableFileInput = document.getElementById("timetable-file-input");
-    if (timetableFileInput) {
-        timetableFileInput.addEventListener("change", (e) => {
-            handleTimetableUpload(e);
-        });
-    }
-
-    // Download CSV template listener
-    const downloadCsvTemplateBtn = document.getElementById("download-csv-template-btn");
-    if (downloadCsvTemplateBtn) {
-        downloadCsvTemplateBtn.addEventListener("click", () => {
-            downloadTimetableCSVTemplate();
-        });
-    }
-
-    // Toggle manual builder
-    const toggleManualBuilderBtn = document.getElementById("toggle-manual-builder-btn");
-    const manualBuilderArea = document.getElementById("manual-builder-area");
-    if (toggleManualBuilderBtn && manualBuilderArea) {
-        toggleManualBuilderBtn.addEventListener("click", () => {
-            const isHidden = manualBuilderArea.classList.contains("hidden");
-            if (isHidden) {
-                manualBuilderArea.classList.remove("hidden");
-                toggleManualBuilderBtn.innerHTML = '<i class="fa-solid fa-eye-slash"></i> Tutup Pembina Jadual';
-                renderManualGridInputs();
-            } else {
-                manualBuilderArea.classList.add("hidden");
-                toggleManualBuilderBtn.innerHTML = '<i class="fa-solid fa-eye"></i> Tunjukkan Pembina Jadual';
-            }
         });
     }
 
@@ -349,50 +301,14 @@ function setupEventListeners() {
         });
     }
 
-    // Floating reference timetable button
-    const viewTimetableRefBtn = document.getElementById("view-timetable-ref-btn");
-    const timetableModal = document.getElementById("timetable-modal");
-    const closeTimetableModal = document.getElementById("close-timetable-modal");
-    const timetableModalBody = document.getElementById("timetable-modal-body");
-
-    if (viewTimetableRefBtn && timetableModal && closeTimetableModal && timetableModalBody) {
-        viewTimetableRefBtn.addEventListener("click", () => {
-            if (!state.visualTimetable || !state.visualTimetable.data) return;
-
-            if (state.visualTimetable.type === 'image') {
-                timetableModalBody.innerHTML = `<img src="${state.visualTimetable.data}" alt="Jadual Waktu Visual" style="max-width:100%; height:auto;">`;
-            } else if (state.visualTimetable.type === 'pdf') {
-                timetableModalBody.innerHTML = `<iframe src="${state.visualTimetable.data}" style="width:100%; height:500px;" frameborder="0"></iframe>`;
-            }
-            timetableModal.classList.remove("hidden");
-        });
-
-        closeTimetableModal.addEventListener("click", () => {
-            timetableModal.classList.add("hidden");
-            timetableModalBody.innerHTML = ""; // Clear content
-        });
-
-        // Close on overlay backdrop click
-        timetableModal.addEventListener("click", (e) => {
-            if (e.target === timetableModal) {
-                timetableModal.classList.add("hidden");
-                timetableModalBody.innerHTML = "";
-            }
-        });
-    }
-
     // Restore default timetable listener
     const restoreDefaultTimetableBtn = document.getElementById("restore-default-timetable-btn");
     if (restoreDefaultTimetableBtn) {
         restoreDefaultTimetableBtn.addEventListener("click", () => {
             if (confirm("Adakah anda pasti untuk menetapkan semula jadual waktu kepada jadual lalai Mohd Azrulnizam?")) {
                 state.timetable = JSON.parse(JSON.stringify(TIMETABLE));
-                state.visualTimetable = { type: "", data: "" };
                 localStorage.setItem("bdr_timetable", JSON.stringify(state.timetable));
-                localStorage.setItem("bdr_visual_timetable", JSON.stringify(state.visualTimetable));
                 syncLogsWithActiveTimetable();
-                updateTimetableStatus();
-                checkVisualTimetableBtn();
                 loadActiveDateLog();
                 renderManualGridInputs();
                 showToast("Jadual waktu telah dikembalikan ke jadual asal!");
@@ -408,10 +324,9 @@ function setupEventListeners() {
                 state.timetable = { 1: {}, 2: {}, 3: {}, 4: {}, 5: {} };
                 localStorage.setItem("bdr_timetable", JSON.stringify(state.timetable));
                 syncLogsWithActiveTimetable();
-                updateTimetableStatus();
                 loadActiveDateLog();
                 renderManualGridInputs();
-                showToast("Jadual waktu dikosongkan! Sila gunakan Pembina Jadual di bawah untuk menulis jadual baru.");
+                showToast("Jadual waktu dikosongkan! Sila masukkan jadual baru secara manual.");
             }
         });
     }
@@ -465,10 +380,6 @@ function setupEventListeners() {
                 if (importedData.timetable) {
                     state.timetable = importedData.timetable;
                     localStorage.setItem("bdr_timetable", JSON.stringify(state.timetable));
-                }
-                if (importedData.visualTimetable) {
-                    state.visualTimetable = importedData.visualTimetable;
-                    localStorage.setItem("bdr_visual_timetable", JSON.stringify(state.visualTimetable));
                 }
                 
                 loadLocalStorageData();
@@ -1424,570 +1335,15 @@ function parseCSVLine(line) {
     return result;
 }
 
-// Handle Timetable CSV, Image, or PDF Upload
-function handleTimetableUpload(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    const fileName = file.name.toLowerCase();
-    
-    // 1. If CSV, parse and auto-detect slots
-    if (fileName.endsWith('.csv')) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            try {
-                const text = e.target.result;
-                const lines = text.split(/\r?\n/);
-                const newTimetable = {};
-                const dayMap = {
-                    "ahad": 0, "sunday": 0,
-                    "isnin": 1, "monday": 1,
-                    "selasa": 2, "tuesday": 2,
-                    "rabu": 3, "wednesday": 3,
-                    "khamis": 4, "thursday": 4,
-                    "jumaat": 5, "friday": 5,
-                    "sabtu": 6, "saturday": 6
-                };
-
-                let successCount = 0;
-
-                for (let i = 1; i < lines.length; i++) {
-                    const line = lines[i].trim();
-                    if (!line) continue;
-
-                    const columns = parseCSVLine(line);
-                    if (columns.length < 5) continue;
-
-                    const dayNameInput = columns[0].toLowerCase();
-                    const startTimeInput = columns[1];
-                    const endTimeInput = columns[2];
-                    const courseCode = columns[3];
-                    const courseName = columns[4];
-                    const className = columns[5] || "";
-                    const roomName = columns[6] || "";
-                    const classType = columns[7] || "Kuliah";
-
-                    const dayIndex = dayMap[dayNameInput];
-                    if (dayIndex === undefined) continue;
-
-                    const startHour = parseInt(startTimeInput.split(":")[0]);
-                    const endHour = parseInt(endTimeInput.split(":")[0]);
-
-                    if (isNaN(startHour) || isNaN(endHour) || startHour >= endHour) continue;
-
-                    if (!newTimetable[dayIndex]) {
-                        newTimetable[dayIndex] = {};
-                    }
-
-                    for (let h = startHour; h < endHour; h++) {
-                        newTimetable[dayIndex][h] = {
-                            task: "Pelaksanaan Kelas",
-                            info: `${courseCode} - ${courseName} (${className}) [${classType} - ${roomName}]`
-                        };
-                        successCount++;
-                    }
-                }
-
-                if (successCount > 0) {
-                    state.timetable = newTimetable;
-                    localStorage.setItem("bdr_timetable", JSON.stringify(state.timetable));
-                    syncLogsWithActiveTimetable();
-                    updateTimetableStatus();
-                    loadActiveDateLog();
-                    showToast(`Jadual waktu berjaya diimport! (${successCount} slot kuliah dikesan).`);
-                } else {
-                    showToast("Tiada slot jadual waktu sah dikesan dalam CSV.", "warning");
-                }
-            } catch (err) {
-                console.error(err);
-                showToast("Ralat membaca fail jadual waktu CSV.", "danger");
-            }
-        };
-        reader.readAsText(file);
-    } 
-    // 2. If Image or PDF
-    else if (fileName.endsWith('.png') || fileName.endsWith('.jpg') || fileName.endsWith('.jpeg') || fileName.endsWith('.pdf')) {
-        const loadingOverlay = document.getElementById("loading-overlay");
-        const loadingText = document.getElementById("loading-overlay-text");
-
-        if (fileName.endsWith('.pdf')) {
-            if (loadingOverlay) loadingOverlay.classList.remove("hidden");
-            if (loadingText) loadingText.innerText = "Membaca Fail PDF...";
-
-            // 1. Save PDF as visual reference (DataURL)
-            const visualReader = new FileReader();
-            visualReader.onload = (e) => {
-                state.visualTimetable = {
-                    type: 'pdf',
-                    data: e.target.result
-                };
-                localStorage.setItem("bdr_visual_timetable", JSON.stringify(state.visualTimetable));
-                updateTimetableStatus();
-                checkVisualTimetableBtn();
-                loadActiveDateLog();
-            };
-            visualReader.readAsDataURL(file);
-
-            // 2. Parse PDF text using PDF.js
-            const bufferReader = new FileReader();
-            bufferReader.onload = async (e) => {
-                try {
-                    const typedarray = new Uint8Array(e.target.result);
-                    const pdf = await pdfjsLib.getDocument(typedarray).promise;
-                    
-                    // We only need the first page for the timetable grid
-                    const page = await pdf.getPage(1);
-                    const textContent = await page.getTextContent();
-                    const items = textContent.items;
-
-                    let yIsnin = null, ySelasa = null, yRabu = null, yKhamis = null, yJumaat = null;
-                    const hoursX = {};
-
-                    // Map days and hours coordinates
-                    items.forEach(item => {
-                        const text = item.str.toLowerCase().trim();
-                        const x = item.transform[4];
-                        const y = item.transform[5];
-
-                        // Match day names
-                        if (text === "isnin" || text.includes("isnin")) yIsnin = y;
-                        else if (text === "selasa" || text.includes("selasa")) ySelasa = y;
-                        else if (text === "rabu" || text.includes("rabu")) yRabu = y;
-                        else if (text === "khamis" || text.includes("khamis")) yKhamis = y;
-                        else if (text === "jumaat" || text.includes("jumaat")) yJumaat = y;
-
-                        // Match hour headers: "8:00", "9:00", etc.
-                        if (/^8[:.]00/.test(text) || text === "8:00" || text === "8.00") hoursX[8] = x;
-                        else if (/^9[:.]00/.test(text) || text === "9:00" || text === "9.00") hoursX[9] = x;
-                        else if (/^10[:.]00/.test(text) || text === "10:00" || text === "10.00") hoursX[10] = x;
-                        else if (/^11[:.]00/.test(text) || text === "11:00" || text === "11.00") hoursX[11] = x;
-                        else if (/^12[:.]00/.test(text) || text === "12:00" || text === "12.00") hoursX[12] = x;
-                        else if (/^1[:.]00/.test(text) || text === "1:00" || text === "1.00") hoursX[13] = x;
-                        else if (/^2[:.]00/.test(text) || text === "2:00" || text === "2.00") hoursX[14] = x;
-                        else if (/^3[:.]00/.test(text) || text === "3:00" || text === "3.00") hoursX[15] = x;
-                        else if (/^4[:.]00/.test(text) || text === "4:00" || text === "4.00") hoursX[16] = x;
-                        else if (/^5[:.]00/.test(text) || text === "5:00" || text === "5.00") hoursX[17] = x;
-                    });
-
-                    // Interpolate for missing hour columns coordinates
-                    const detectedHours = Object.keys(hoursX).map(Number).sort((a,b)=>a-b);
-                    if (detectedHours.length >= 2) {
-                        const firstH = detectedHours[0];
-                        const lastH = detectedHours[detectedHours.length - 1];
-                        const firstX = hoursX[firstH];
-                        const lastX = hoursX[lastH];
-                        const avgWidth = (lastX - firstX) / (lastH - firstH);
-                        for (let h = 8; h <= 17; h++) {
-                            if (hoursX[h] === undefined) {
-                                hoursX[h] = firstX + (h - firstH) * avgWidth;
-                            }
-                        }
-                    } else {
-                        if (loadingOverlay) loadingOverlay.classList.add("hidden");
-                        showToast("Jadual PDF disimpan sebagai rujukan visual (Gagal mengesan grid jam).", "warning");
-                        return;
-                    }
-
-                    // Interpolate Day Y-coordinates (y increases upwards in PDF.js coordinates)
-                    const dayYArray = [yIsnin, ySelasa, yRabu, yKhamis, yJumaat];
-                    const detectedDays = [];
-                    dayYArray.forEach((y, i) => { if (y !== null) detectedDays.push({ index: i + 1, y: y }); });
-
-                    if (detectedDays.length >= 1) {
-                        let avgRowHeight = -70; // Negative row height since y decreases from Isnin down to Jumaat
-                        if (detectedDays.length >= 2) {
-                            const firstD = detectedDays[0];
-                            const lastD = detectedDays[detectedDays.length - 1];
-                            avgRowHeight = (lastD.y - firstD.y) / (lastD.index - firstD.index);
-                        }
-                        const ref = detectedDays[0];
-                        yIsnin = ref.y - (ref.index - 1) * avgRowHeight;
-                        ySelasa = ref.y - (ref.index - 2) * avgRowHeight;
-                        yRabu = ref.y - (ref.index - 3) * avgRowHeight;
-                        yKhamis = ref.y - (ref.index - 4) * avgRowHeight;
-                        yJumaat = ref.y - (ref.index - 5) * avgRowHeight;
-                    } else {
-                        if (loadingOverlay) loadingOverlay.classList.add("hidden");
-                        showToast("Jadual PDF disimpan sebagai rujukan visual (Gagal mengesan grid hari).", "warning");
-                        return;
-                    }
-
-                    const daysY = { 1: yIsnin, 2: ySelasa, 3: yRabu, 4: yKhamis, 5: yJumaat };
-                    const rowHeight = Math.abs(yIsnin - yJumaat) / 4;
-                    const colWidth = (hoursX[17] - hoursX[8]) / 9;
-
-                    // Group text items into cells
-                    const cellGroups = {};
-                    items.forEach(item => {
-                        const text = item.str.trim();
-                        if (!text) return;
-
-                        const x = item.transform[4];
-                        const y = item.transform[5];
-
-                        let dayIndex = null;
-                        for (let d = 1; d <= 5; d++) {
-                            if (Math.abs(y - daysY[d]) < rowHeight * 0.45) {
-                                dayIndex = d;
-                                break;
-                            }
-                        }
-
-                        let hourIndex = null;
-                        for (let h = 8; h <= 16; h++) {
-                            const xStart = hoursX[h];
-                            const xEnd = hoursX[h+1];
-                            if (x >= xStart - colWidth*0.15 && x <= xEnd + colWidth*0.15) {
-                                hourIndex = h;
-                                break;
-                            }
-                        }
-
-                        if (dayIndex && hourIndex) {
-                            const key = `${dayIndex}_${hourIndex}`;
-                            if (!cellGroups[key]) cellGroups[key] = [];
-                            cellGroups[key].push({ text: text, x: x, y: y });
-                        }
-                    });
-
-                    // Reconstruct timetable
-                    const newTimetable = { 1: {}, 2: {}, 3: {}, 4: {}, 5: {} };
-                    let detectedCount = 0;
-
-                    for (let key in cellGroups) {
-                        const [d, h] = key.split("_").map(Number);
-                        
-                        // Sort items in cell left-to-right (by x coordinate)
-                        const cellItems = cellGroups[key].sort((a, b) => a.x - b.x);
-                        let cellText = cellItems.map(item => item.text).join(" ").trim();
-                        cellText = cellText.replace(/\s+/g, ' ');
-
-                        // Course code pattern filter
-                        const hasCourseCode = /[A-Z]{3,4}\d{4,5}/i.test(cellText) || /\bPA\b/i.test(cellText) || /\bPENASIHAT\b/i.test(cellText);
-
-                        if (hasCourseCode) {
-                            const noiseFilter = ["isnin", "selasa", "rabu", "khamis", "jumaat", "8:00", "9:00", "10:00", "11:00", "12:00", "1:00", "2:00", "3:00", "4:00", "5:00", "6:00"];
-                            noiseFilter.forEach(nf => {
-                                const reg = new RegExp("\\b" + nf + "\\b", "gi");
-                                cellText = cellText.replace(reg, "");
-                            });
-                            cellText = cellText.trim();
-
-                            if (cellText.length > 2) {
-                                newTimetable[d][h] = {
-                                    task: "Pelaksanaan Kelas",
-                                    info: cellText
-                                };
-                                detectedCount++;
-                            }
-                        }
-                    }
-
-                    if (loadingOverlay) loadingOverlay.classList.add("hidden");
-
-                    if (detectedCount > 0) {
-                        state.timetable = newTimetable;
-                        localStorage.setItem("bdr_timetable", JSON.stringify(state.timetable));
-                        syncLogsWithActiveTimetable();
-                        updateTimetableStatus();
-                        loadActiveDateLog();
-                        showToast(`Jadual PDF berjaya diimbas! (Dikesan: ${detectedCount} slot kuliah aktif).`);
-                    } else {
-                        showToast("Jadual PDF disimpan sebagai rujukan visual (Teks kelas tidak dapat dipetakan secara automatik).", "warning");
-                    }
-
-                } catch (pdfErr) {
-                    if (loadingOverlay) loadingOverlay.classList.add("hidden");
-                    console.error("PDF Parsing Error:", pdfErr);
-                    showToast("PDF disimpan sebagai rujukan visual (Gagal mengekstrak teks jadual).", "warning");
-                }
-            };
-            bufferReader.readAsArrayBuffer(file);
-        } else {
-            // Save image as visual reference immediately first
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                state.visualTimetable = {
-                    type: 'image',
-                    data: e.target.result
-                };
-                localStorage.setItem("bdr_visual_timetable", JSON.stringify(state.visualTimetable));
-                updateTimetableStatus();
-                checkVisualTimetableBtn();
-                loadActiveDateLog();
-
-                // Run Tesseract OCR in the background for auto-detect slots
-                if (loadingOverlay) loadingOverlay.classList.remove("hidden");
-                if (loadingText) loadingText.innerText = "Mengimbas teks jadual waktu...";
-
-                Tesseract.recognize(
-                    file,
-                    'eng',
-                    { logger: m => {
-                        if (m.status === 'recognizing' && loadingText) {
-                            const pct = Math.floor(m.progress * 100);
-                            loadingText.innerText = `Mengimbas Teks Gambar: ${pct}%`;
-                        }
-                    } }
-                ).then(result => {
-                    if (loadingOverlay) loadingOverlay.classList.add("hidden");
-                    if (loadingText) loadingText.innerText = "Menganalisis jadual waktu...";
-
-                    const { data: { words } } = result;
-                    
-                    // Group words by horizontal (X) and vertical (Y) coordinates to map days and hours
-                    let yIsnin = null, ySelasa = null, yRabu = null, yKhamis = null, yJumaat = null;
-                    const hoursX = {}; // Mapping of hour (8, 9, 10...) to center X coordinate
-                    
-                    words.forEach(w => {
-                        const text = w.text.toLowerCase().trim();
-                        const cx = (w.bbox.x0 + w.bbox.x1) / 2;
-                        const cy = (w.bbox.y0 + w.bbox.y1) / 2;
-                        
-                        // Match day names (supporting fuzzy matching)
-                        if (text.includes("isnin") || text === "isnin" || (text.includes("isn") && text.length >= 3)) {
-                            yIsnin = cy;
-                        } else if (text.includes("selasa") || text === "selasa" || (text.includes("sel") && text.length >= 3)) {
-                            ySelasa = cy;
-                        } else if (text.includes("rabu") || text === "rabu" || (text.includes("rab") && text.length >= 3)) {
-                            yRabu = cy;
-                        } else if (text.includes("khamis") || text === "khamis" || (text.includes("kha") && text.length >= 3)) {
-                            yKhamis = cy;
-                        } else if (text.includes("jumaat") || text === "jumaat" || (text.includes("jum") && text.length >= 3)) {
-                            yJumaat = cy;
-                        }
-                        
-                        // Match hour headers: "8:00", "9:00", "10:00", "11:00", "12:00", "1:00", "2:00", "3:00", "4:00", "5:00", "6:00"
-                        if (/^8[:.]00/.test(text) || text === "8:00" || text === "8.00") hoursX[8] = cx;
-                        else if (/^9[:.]00/.test(text) || text === "9:00" || text === "9.00") hoursX[9] = cx;
-                        else if (/^10[:.]00/.test(text) || text === "10:00" || text === "10.00") hoursX[10] = cx;
-                        else if (/^11[:.]00/.test(text) || text === "11:00" || text === "11.00") hoursX[11] = cx;
-                        else if (/^12[:.]00/.test(text) || text === "12:00" || text === "12.00") hoursX[12] = cx;
-                        else if (/^1[:.]00/.test(text) || text === "1:00" || text === "1.00") hoursX[13] = cx;
-                        else if (/^2[:.]00/.test(text) || text === "2:00" || text === "2.00") hoursX[14] = cx;
-                        else if (/^3[:.]00/.test(text) || text === "3:00" || text === "3.00") hoursX[15] = cx;
-                        else if (/^4[:.]00/.test(text) || text === "4:00" || text === "4.00") hoursX[16] = cx;
-                        else if (/^5[:.]00/.test(text) || text === "5:00" || text === "5.00") hoursX[17] = cx;
-                    });
-                    
-                    // Interpolation for missing hour columns coordinates
-                    const detectedHours = Object.keys(hoursX).map(Number).sort((a,b)=>a-b);
-                    if (detectedHours.length >= 2) {
-                        const firstH = detectedHours[0];
-                        const lastH = detectedHours[detectedHours.length - 1];
-                        const firstX = hoursX[firstH];
-                        const lastX = hoursX[lastH];
-                        const avgWidth = (lastX - firstX) / (lastH - firstH);
-                        for (let h = 8; h <= 17; h++) {
-                            if (hoursX[h] === undefined) {
-                                hoursX[h] = firstX + (h - firstH) * avgWidth;
-                            }
-                        }
-                    } else {
-                        showToast("Jadual disimpan sebagai rujukan visual (Koordinat jam tidak dikesan untuk imbasan automatik).", "warning");
-                        return;
-                    }
-                    
-                    // Interpolation for Day Y-coordinates
-                    const dayYArray = [yIsnin, ySelasa, yRabu, yKhamis, yJumaat];
-                    const detectedDays = [];
-                    dayYArray.forEach((y, i) => { if (y !== null) detectedDays.push({ index: i + 1, y: y }); });
-                    
-                    if (detectedDays.length >= 1) {
-                        let avgRowHeight = 70; // default estimate
-                        if (detectedDays.length >= 2) {
-                            const firstD = detectedDays[0];
-                            const lastD = detectedDays[detectedDays.length - 1];
-                            avgRowHeight = (lastD.y - firstD.y) / (lastD.index - firstD.index);
-                        }
-                        const ref = detectedDays[0];
-                        yIsnin = ref.y - (ref.index - 1) * avgRowHeight;
-                        ySelasa = ref.y - (ref.index - 2) * avgRowHeight;
-                        yRabu = ref.y - (ref.index - 3) * avgRowHeight;
-                        yKhamis = ref.y - (ref.index - 4) * avgRowHeight;
-                        yJumaat = ref.y - (ref.index - 5) * avgRowHeight;
-                    } else {
-                        showToast("Jadual disimpan sebagai rujukan visual (Koordinat hari tidak dikesan untuk imbasan automatik).", "warning");
-                        return;
-                    }
-                    
-                    const daysY = { 1: yIsnin, 2: ySelasa, 3: yRabu, 4: yKhamis, 5: yJumaat };
-                    const rowHeight = (yJumaat - yIsnin) / 4;
-                    const colWidth = (hoursX[17] - hoursX[8]) / 9;
-                    
-                    // Group words into cells
-                    const cellGroups = {};
-                    
-                    words.forEach(w => {
-                        const cx = (w.bbox.x0 + w.bbox.x1) / 2;
-                        const cy = (w.bbox.y0 + w.bbox.y1) / 2;
-                        
-                        let dayIndex = null;
-                        for (let d = 1; d <= 5; d++) {
-                            if (Math.abs(cy - daysY[d]) < rowHeight * 0.45) {
-                                dayIndex = d;
-                                break;
-                            }
-                        }
-                        
-                        let hourIndex = null;
-                        for (let h = 8; h <= 16; h++) {
-                            const xStart = hoursX[h];
-                            const xEnd = hoursX[h+1];
-                            if (cx >= xStart - colWidth*0.15 && cx <= xEnd + colWidth*0.15) {
-                                hourIndex = h;
-                                break;
-                            }
-                        }
-                        
-                        if (dayIndex && hourIndex) {
-                            const key = `${dayIndex}_${hourIndex}`;
-                            if (!cellGroups[key]) cellGroups[key] = [];
-                            cellGroups[key].push(w);
-                        }
-                    });
-                    
-                    // Reconstruct the new timetable state
-                    const newTimetable = { 1: {}, 2: {}, 3: {}, 4: {}, 5: {} };
-                    let detectedCount = 0;
-                    
-                    for (let key in cellGroups) {
-                        const [d, h] = key.split("_").map(Number);
-                        
-                        // Sort words in cell left-to-right, top-to-bottom
-                        const cellWords = cellGroups[key].sort((a, b) => {
-                            if (Math.abs(a.bbox.y0 - b.bbox.y0) < 10) {
-                                return a.bbox.x0 - b.bbox.x0;
-                            }
-                            return a.bbox.y0 - b.bbox.y0;
-                        });
-                        
-                        let cellText = cellWords.map(w => w.text).join(" ").trim();
-                        cellText = cellText.replace(/\s+/g, ' ');
-                        
-                        // Course code pattern filter
-                        const hasCourseCode = /[A-Z]{3,4}\d{4,5}/i.test(cellText) || /\bPA\b/i.test(cellText) || /\bPENASIHAT\b/i.test(cellText);
-                        
-                        if (hasCourseCode) {
-                            const noiseFilter = ["isnin", "selasa", "rabu", "khamis", "jumaat", "8:00", "9:00", "10:00", "11:00", "12:00", "1:00", "2:00", "3:00", "4:00", "5:00", "6:00"];
-                            noiseFilter.forEach(nf => {
-                                const reg = new RegExp("\\b" + nf + "\\b", "gi");
-                                cellText = cellText.replace(reg, "");
-                            });
-                            cellText = cellText.trim();
-                            
-                            if (cellText.length > 2) {
-                                newTimetable[d][h] = {
-                                    task: "Pelaksanaan Kelas",
-                                    info: cellText
-                                };
-                                detectedCount++;
-                            }
-                        }
-                    }
-                    
-                    if (detectedCount > 0) {
-                        state.timetable = newTimetable;
-                        localStorage.setItem("bdr_timetable", JSON.stringify(state.timetable));
-                        syncLogsWithActiveTimetable();
-                        updateTimetableStatus();
-                        loadActiveDateLog();
-                        showToast(`Jadual waktu berjaya diimbas! (Dikesan: ${detectedCount} slot kuliah aktif).`);
-                    } else {
-                        showToast("Jadual disimpan sebagai rujukan visual (Teks subjek tidak dikesan).", "warning");
-                    }
-                }).catch(err => {
-                    if (loadingOverlay) loadingOverlay.classList.add("hidden");
-                    console.error("Tesseract Error:", err);
-                    showToast("Imbasan teks gagal, namun gambar jadual disimpan sebagai rujukan visual.", "warning");
-                });
-            };
-            reader.readAsDataURL(file);
-        }
-    }
-    // 3. Unsupported format
-    else {
-        showToast("Format fail tidak disokong! Sila muat naik fail .csv, .png, .jpg atau .pdf.", "danger");
-    }
-}
-
-// Download CSV template
-function downloadTimetableCSVTemplate() {
-    const csvContent = 
-`Hari,Waktu Mula,Waktu Tamat,Kod Kursus,Nama Kursus,Kumpulan/Kelas,Bilik/Makmal,Jenis Kelas (Kuliah/Amali)
-Selasa,08:00,10:00,DFC10353,Programming Fundamentals,DIT1B,LAB2,Amali
-Selasa,12:00,13:00,DFX40063,Server Administration,"DIT4, DIT5A, DIT5B",LAB2,Kuliah
-Selasa,15:00,16:00,DFX50083,Python Programming,"DIT5A(B), DIT6(B)",LAB1,Kuliah
-Selasa,16:00,17:00,DFX50083,Python Programming,"DIT5A(B), DIT6(B)",LAB1,Amali
-Khamis,08:00,10:00,DFX50083,Python Programming,DIT5A(**)/DIT6(**),LAB3,Amali
-Khamis,12:00,13:00,DFX40063,Server Administration,"DIT4, DIT5A, DIT5B",LAB2,Kuliah
-Khamis,13:00,14:00,DFX40063,Server Administration,"DIT4, DIT5A, DIT5B",LAB2,Amali
-Khamis,15:00,17:00,DFX50083,Python Programming,DIT5B,TEC2,Kuliah`;
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const downloadAnchor = document.createElement('a');
-    downloadAnchor.setAttribute("href", url);
-    downloadAnchor.setAttribute("download", "bdr_timetable_template.csv");
-    document.body.appendChild(downloadAnchor);
-    downloadAnchor.click();
-    downloadAnchor.remove();
-}
-
-// Update Timetable Card Status in Settings
-function updateTimetableStatus() {
-    const statusBox = document.getElementById("timetable-upload-status");
-    const statusText = document.getElementById("timetable-status-text");
-
-    if (!statusBox || !statusText) return;
-
-    let totalSlots = 0;
-    for (let day in state.timetable) {
-        totalSlots += Object.keys(state.timetable[day]).length;
-    }
-
-    let statusMsg = "";
-    if (totalSlots > 0) {
-        statusMsg = `Jadual waktu tersimpan aktif. (Dikesan: ${totalSlots} slot kuliah bagi seluruh minggu).`;
-    } else {
-        statusMsg = `Tiada jadual waktu kuliah tersimpan.`;
-    }
-
-    if (state.visualTimetable && state.visualTimetable.data) {
-        statusMsg += ` | Rujukan Jadual Visual (${state.visualTimetable.type.toUpperCase()}) dikesan & sedia dirujuk.`;
-    }
-
-    statusText.innerText = statusMsg;
-
-    if (totalSlots > 0 || (state.visualTimetable && state.visualTimetable.data)) {
-        statusBox.classList.remove("hidden");
-    } else {
-        statusBox.classList.add("hidden");
-    }
-}
-
-// Toggle display of timetable upload section
+// Toggle display of manual timetable section
 function toggleTimetableSection(isLecturer) {
-    const section = document.getElementById("timetable-upload-section");
+    const section = document.getElementById("timetable-manual-section");
     if (section) {
         if (isLecturer) {
             section.style.display = "block";
-            updateTimetableStatus();
         } else {
             section.style.display = "none";
         }
-    }
-}
-
-// Check if floating reference button should be visible
-function checkVisualTimetableBtn() {
-    const viewTimetableRefBtn = document.getElementById("view-timetable-ref-btn");
-    if (!viewTimetableRefBtn) return;
-    
-    if (state.visualTimetable && state.visualTimetable.data && state.profile.isLecturer) {
-        viewTimetableRefBtn.classList.remove("hidden");
-    } else {
-        viewTimetableRefBtn.classList.add("hidden");
     }
 }
 
@@ -2057,7 +1413,6 @@ function saveManualTimetable() {
 
     localStorage.setItem("bdr_timetable", JSON.stringify(state.timetable));
     syncLogsWithActiveTimetable();
-    updateTimetableStatus();
     loadActiveDateLog();
     showToast("Jadual manual berjaya disimpan!");
 }

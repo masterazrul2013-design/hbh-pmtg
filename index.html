@@ -12,10 +12,6 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Custom Style Sheet -->
     <link rel="stylesheet" href="style.css">
-    <!-- Tesseract.js for client-side OCR -->
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-    <!-- PDF.js for client-side PDF text extraction -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
 </head>
 <body>
     <!-- Screen View (Hidden during printing) -->
@@ -602,54 +598,34 @@
                                 <label for="profile-is-lecturer" style="margin-bottom: 0; font-weight: 600; cursor: pointer; font-size: 0.95rem;">Adakah anda Pensyarah? (Aktifkan pengisian jadual waktu kuliah secara automatik)</label>
                             </div>
                             
-                             <div id="timetable-upload-section">
-                                <div style="border-top: 1px solid var(--border-color); padding-top: 1.5rem; margin-top: 1rem;">
-                                    <h4 style="font-size: 1rem; margin-bottom: 0.5rem;"><i class="fa-solid fa-upload"></i> Muat Naik Jadual Waktu (CSV / JPG / PDF)</h4>
-                                    <p class="help-text">Muat naik fail jadual waktu anda di sini. Fail <strong>CSV</strong> akan dikesan slot jam kuliahnya secara automatik. Fail <strong>Gambar (JPG/PNG) atau PDF</strong> pula akan disimpan sebagai rujukan visual terapung untuk anda rujuk semasa mengisi log.</p>
-                                    
-                                    <div style="display: flex; gap: 1rem; flex-wrap: wrap; margin-top: 1rem;">
-                                        <div style="flex: 1; min-width: 250px;">
-                                            <input type="file" id="timetable-file-input" class="form-control" accept=".csv,.png,.jpg,.jpeg,.pdf">
-                                        </div>
-                                        <div style="display: flex; gap: 0.5rem;">
-                                            <button id="download-csv-template-btn" class="btn btn-secondary"><i class="fa-solid fa-download"></i> Muat Turun Templat CSV</button>
-                                            <button id="clear-current-timetable-btn" class="btn btn-secondary" style="border-color: #ef4444; color: #ef4444;"><i class="fa-solid fa-trash-can"></i> Kosongkan Jadual</button>
-                                            <button id="restore-default-timetable-btn" class="btn btn-danger"><i class="fa-solid fa-arrows-rotate"></i> Reset Jadual Asal</button>
-                                        </div>
-                                    </div>
-                                    <div id="timetable-upload-status" class="warning-box hidden" style="background-color: rgba(16, 185, 129, 0.1); color: var(--success-color); border-color: rgba(16, 185, 129, 0.2); margin-top: 1rem;">
-                                        <i class="fa-solid fa-circle-check"></i>
-                                        <span id="timetable-status-text">Jadual waktu tersimpan aktif.</span>
-                                    </div>
-
-                                    <!-- Manual Timetable Builder Toggle and Area -->
-                                    <div style="margin-top: 2rem; border-top: 1px dashed var(--border-color); padding-top: 1.5rem;">
-                                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                                            <h4 style="font-size: 1rem; margin: 0;"><i class="fa-solid fa-keyboard"></i> Edit Jadual Kuliah Secara Manual</h4>
-                                            <button type="button" id="toggle-manual-builder-btn" class="btn btn-secondary btn-sm" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;"><i class="fa-solid fa-eye-slash"></i> Sembunyikan Pembina Jadual</button>
-                                        </div>
-                                        
-                                        <div id="manual-builder-area">
-                                            <p class="help-text" style="margin-bottom: 1rem;">Masukkan butiran kelas (contoh: <code>DFC10353 - Programming Fundamentals (DIT1B) [Amali - LAB2]</code>) pada slot jam yang dikehendaki. Kosongkan slot yang tiada kelas.</p>
-                                            <div class="timetable-manual-grid">
-                                                <!-- Selasa -->
-                                                <div class="timetable-manual-col">
-                                                    <h4>Hari Selasa</h4>
-                                                    <div id="manual-grid-selasa"></div>
-                                                </div>
-                                                <!-- Khamis -->
-                                                <div class="timetable-manual-col">
-                                                    <h4>Hari Khamis</h4>
-                                                    <div id="manual-grid-khamis"></div>
-                                                </div>
-                                            </div>
-                                            <div style="margin-top: 1.5rem; text-align: right;">
-                                                <button type="button" id="save-manual-timetable-btn" class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i> Simpan Jadual Manual</button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+                             <div id="timetable-manual-section" style="border-top: 1px solid var(--border-color); padding-top: 1.5rem; margin-top: 1rem;">
+                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
+                                     <h4 style="font-size: 1.05rem; margin: 0;"><i class="fa-solid fa-keyboard"></i> Edit Jadual Kuliah Secara Manual</h4>
+                                     <div style="display: flex; gap: 0.5rem;">
+                                         <button id="clear-current-timetable-btn" class="btn btn-secondary" style="border-color: #ef4444; color: #ef4444; padding: 0.45rem 0.9rem; font-size: 0.85rem;"><i class="fa-solid fa-trash-can"></i> Kosongkan Jadual</button>
+                                         <button id="restore-default-timetable-btn" class="btn btn-danger" style="padding: 0.45rem 0.9rem; font-size: 0.85rem;"><i class="fa-solid fa-arrows-rotate"></i> Reset Jadual Asal</button>
+                                     </div>
+                                 </div>
+                                 
+                                 <div id="manual-builder-area">
+                                     <p class="help-text" style="margin-bottom: 1.25rem;">Masukkan butiran kelas (contoh: <code>DFC10353 - Programming Fundamentals (DIT1B) [Amali - LAB2]</code>) pada slot jam yang dikehendaki. Kosongkan slot yang tiada kelas.</p>
+                                     <div class="timetable-manual-grid">
+                                         <!-- Selasa -->
+                                         <div class="timetable-manual-col">
+                                             <h4>Hari Selasa</h4>
+                                             <div id="manual-grid-selasa"></div>
+                                         </div>
+                                         <!-- Khamis -->
+                                         <div class="timetable-manual-col">
+                                             <h4>Hari Khamis</h4>
+                                             <div id="manual-grid-khamis"></div>
+                                         </div>
+                                     </div>
+                                     <div style="margin-top: 1.5rem; text-align: right;">
+                                         <button type="button" id="save-manual-timetable-btn" class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i> Simpan Jadual Waktu</button>
+                                     </div>
+                                 </div>
+                             </div>
                         </div>
                     </div>
                 </div>
@@ -820,12 +796,6 @@
         </div>
     </div>
 
-    <!-- Loading Overlay for OCR -->
-    <div id="loading-overlay" class="modal hidden" style="background-color: rgba(0,0,0,0.75); flex-direction: column; color: white; gap: 0.5rem;">
-        <i class="fa-solid fa-spinner fa-spin fa-3x" style="color: var(--primary-color); margin-bottom: 1.5rem;"></i>
-        <h3 id="loading-overlay-text" style="font-family: 'Outfit', sans-serif; font-size: 1.25rem;">Menganalisis jadual waktu...</h3>
-        <p style="font-size: 0.85rem; color: #cbd5e1; margin-top: 0.5rem; text-align: center; max-width: 320px; padding: 0 1rem;">Sistem sedang mengesan slot kelas dari fail gambar secara automatik. Sila tunggu sebentar.</p>
-    </div>
 
     <!-- Notification Toast -->
     <div id="toast" class="toast hidden">
