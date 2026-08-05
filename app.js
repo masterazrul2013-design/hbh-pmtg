@@ -395,6 +395,7 @@ function setupEventListeners() {
                 updateTimetableStatus();
                 checkVisualTimetableBtn();
                 loadActiveDateLog();
+                renderManualGridInputs();
                 showToast("Jadual waktu telah dikembalikan ke jadual asal!");
             }
         });
@@ -410,6 +411,7 @@ function setupEventListeners() {
                 syncLogsWithActiveTimetable();
                 updateTimetableStatus();
                 loadActiveDateLog();
+                renderManualGridInputs();
                 showToast("Jadual waktu dikosongkan! Sila gunakan Pembina Jadual di bawah untuk menulis jadual baru.");
             }
         });
