@@ -1526,202 +1526,205 @@ function handleTimetableUpload(event) {
             };
             reader.readAsDataURL(file);
         } else {
-            // It is an Image, run Tesseract.js OCR for auto-detect!
-            if (loadingOverlay) loadingOverlay.classList.remove("hidden");
-            
-            Tesseract.recognize(
-                file,
-                'eng',
-                { logger: m => {
-                    if (m.status === 'recognizing' && loadingText) {
-                        const pct = Math.floor(m.progress * 100);
-                        loadingText.innerText = `Menganalisis Gambar: ${pct}%`;
-                    }
-                } }
-            ).then(result => {
-                if (loadingOverlay) loadingOverlay.classList.add("hidden");
-                if (loadingText) loadingText.innerText = "Menganalisis jadual waktu...";
+            // Save image as visual reference immediately first
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                state.visualTimetable = {
+                    type: 'image',
+                    data: e.target.result
+                };
+                localStorage.setItem("bdr_visual_timetable", JSON.stringify(state.visualTimetable));
+                updateTimetableStatus();
+                checkVisualTimetableBtn();
+                loadActiveDateLog();
 
-                const { data: { words } } = result;
-                
-                // Group words by horizontal (X) and vertical (Y) coordinates to map days and hours
-                let yIsnin = null, ySelasa = null, yRabu = null, yKhamis = null, yJumaat = null;
-                const hoursX = {}; // Mapping of hour (8, 9, 10...) to center X coordinate
-                
-                words.forEach(w => {
-                    const text = w.text.toLowerCase().trim();
-                    const cx = (w.bbox.x0 + w.bbox.x1) / 2;
-                    const cy = (w.bbox.y0 + w.bbox.y1) / 2;
-                    
-                    // Match day names (supporting fuzzy matching)
-                    if (text.includes("isnin") || text === "isnin" || (text.includes("isn") && text.length >= 3)) {
-                        yIsnin = cy;
-                    } else if (text.includes("selasa") || text === "selasa" || (text.includes("sel") && text.length >= 3)) {
-                        ySelasa = cy;
-                    } else if (text.includes("rabu") || text === "rabu" || (text.includes("rab") && text.length >= 3)) {
-                        yRabu = cy;
-                    } else if (text.includes("khamis") || text === "khamis" || (text.includes("kha") && text.length >= 3)) {
-                        yKhamis = cy;
-                    } else if (text.includes("jumaat") || text === "jumaat" || (text.includes("jum") && text.length >= 3)) {
-                        yJumaat = cy;
-                    }
-                    
-                    // Match hour headers: "8:00", "9:00", "10:00", "11:00", "12:00", "1:00", "2:00", "3:00", "4:00", "5:00", "6:00"
-                    if (/^8[:.]00/.test(text) || text === "8:00" || text === "8.00") hoursX[8] = cx;
-                    else if (/^9[:.]00/.test(text) || text === "9:00" || text === "9.00") hoursX[9] = cx;
-                    else if (/^10[:.]00/.test(text) || text === "10:00" || text === "10.00") hoursX[10] = cx;
-                    else if (/^11[:.]00/.test(text) || text === "11:00" || text === "11.00") hoursX[11] = cx;
-                    else if (/^12[:.]00/.test(text) || text === "12:00" || text === "12.00") hoursX[12] = cx;
-                    else if (/^1[:.]00/.test(text) || text === "1:00" || text === "1.00") hoursX[13] = cx;
-                    else if (/^2[:.]00/.test(text) || text === "2:00" || text === "2.00") hoursX[14] = cx;
-                    else if (/^3[:.]00/.test(text) || text === "3:00" || text === "3.00") hoursX[15] = cx;
-                    else if (/^4[:.]00/.test(text) || text === "4:00" || text === "4.00") hoursX[16] = cx;
-                    else if (/^5[:.]00/.test(text) || text === "5:00" || text === "5.00") hoursX[17] = cx;
-                });
-                
-                // Interpolation for missing hour columns coordinates
-                const detectedHours = Object.keys(hoursX).map(Number).sort((a,b)=>a-b);
-                if (detectedHours.length >= 2) {
-                    const firstH = detectedHours[0];
-                    const lastH = detectedHours[detectedHours.length - 1];
-                    const firstX = hoursX[firstH];
-                    const lastX = hoursX[lastH];
-                    const avgWidth = (lastX - firstX) / (lastH - firstH);
-                    for (let h = 8; h <= 17; h++) {
-                        if (hoursX[h] === undefined) {
-                            hoursX[h] = firstX + (h - firstH) * avgWidth;
+                // Run Tesseract OCR in the background for auto-detect slots
+                if (loadingOverlay) loadingOverlay.classList.remove("hidden");
+                if (loadingText) loadingText.innerText = "Mengimbas teks jadual waktu...";
+
+                Tesseract.recognize(
+                    file,
+                    'eng',
+                    { logger: m => {
+                        if (m.status === 'recognizing' && loadingText) {
+                            const pct = Math.floor(m.progress * 100);
+                            loadingText.innerText = `Mengimbas Teks Gambar: ${pct}%`;
                         }
-                    }
-                } else {
-                    showToast("Gagal mengesan koordinat jam. Pastikan gambar jadual waktu adalah jelas dan tegak.", "danger");
-                    return;
-                }
-                
-                // Interpolation for Day Y-coordinates
-                const dayYArray = [yIsnin, ySelasa, yRabu, yKhamis, yJumaat];
-                const detectedDays = [];
-                dayYArray.forEach((y, i) => { if (y !== null) detectedDays.push({ index: i + 1, y: y }); });
-                
-                if (detectedDays.length >= 1) {
-                    let avgRowHeight = 70; // default estimate
-                    if (detectedDays.length >= 2) {
-                        const firstD = detectedDays[0];
-                        const lastD = detectedDays[detectedDays.length - 1];
-                        avgRowHeight = (lastD.y - firstD.y) / (lastD.index - firstD.index);
-                    }
-                    const ref = detectedDays[0];
-                    yIsnin = ref.y - (ref.index - 1) * avgRowHeight;
-                    ySelasa = ref.y - (ref.index - 2) * avgRowHeight;
-                    yRabu = ref.y - (ref.index - 3) * avgRowHeight;
-                    yKhamis = ref.y - (ref.index - 4) * avgRowHeight;
-                    yJumaat = ref.y - (ref.index - 5) * avgRowHeight;
-                } else {
-                    showToast("Gagal mengesan koordinat hari. Pastikan gambar jadual waktu adalah jelas dan tegak.", "danger");
-                    return;
-                }
-                
-                const daysY = { 1: yIsnin, 2: ySelasa, 3: yRabu, 4: yKhamis, 5: yJumaat };
-                const rowHeight = (yJumaat - yIsnin) / 4;
-                const colWidth = (hoursX[17] - hoursX[8]) / 9;
-                
-                // Group words into cells
-                const cellGroups = {};
-                
-                words.forEach(w => {
-                    const cx = (w.bbox.x0 + w.bbox.x1) / 2;
-                    const cy = (w.bbox.y0 + w.bbox.y1) / 2;
+                    } }
+                ).then(result => {
+                    if (loadingOverlay) loadingOverlay.classList.add("hidden");
+                    if (loadingText) loadingText.innerText = "Menganalisis jadual waktu...";
+
+                    const { data: { words } } = result;
                     
-                    let dayIndex = null;
-                    for (let d = 1; d <= 5; d++) {
-                        if (Math.abs(cy - daysY[d]) < rowHeight * 0.45) {
-                            dayIndex = d;
-                            break;
+                    // Group words by horizontal (X) and vertical (Y) coordinates to map days and hours
+                    let yIsnin = null, ySelasa = null, yRabu = null, yKhamis = null, yJumaat = null;
+                    const hoursX = {}; // Mapping of hour (8, 9, 10...) to center X coordinate
+                    
+                    words.forEach(w => {
+                        const text = w.text.toLowerCase().trim();
+                        const cx = (w.bbox.x0 + w.bbox.x1) / 2;
+                        const cy = (w.bbox.y0 + w.bbox.y1) / 2;
+                        
+                        // Match day names (supporting fuzzy matching)
+                        if (text.includes("isnin") || text === "isnin" || (text.includes("isn") && text.length >= 3)) {
+                            yIsnin = cy;
+                        } else if (text.includes("selasa") || text === "selasa" || (text.includes("sel") && text.length >= 3)) {
+                            ySelasa = cy;
+                        } else if (text.includes("rabu") || text === "rabu" || (text.includes("rab") && text.length >= 3)) {
+                            yRabu = cy;
+                        } else if (text.includes("khamis") || text === "khamis" || (text.includes("kha") && text.length >= 3)) {
+                            yKhamis = cy;
+                        } else if (text.includes("jumaat") || text === "jumaat" || (text.includes("jum") && text.length >= 3)) {
+                            yJumaat = cy;
                         }
-                    }
-                    
-                    let hourIndex = null;
-                    for (let h = 8; h <= 16; h++) {
-                        const xStart = hoursX[h];
-                        const xEnd = hoursX[h+1];
-                        if (cx >= xStart - colWidth*0.15 && cx <= xEnd + colWidth*0.15) {
-                            hourIndex = h;
-                            break;
-                        }
-                    }
-                    
-                    if (dayIndex && hourIndex) {
-                        const key = `${dayIndex}_${hourIndex}`;
-                        if (!cellGroups[key]) cellGroups[key] = [];
-                        cellGroups[key].push(w);
-                    }
-                });
-                
-                // Reconstruct the new timetable state
-                const newTimetable = { 1: {}, 2: {}, 3: {}, 4: {}, 5: {} };
-                let detectedCount = 0;
-                
-                for (let key in cellGroups) {
-                    const [d, h] = key.split("_").map(Number);
-                    
-                    // Sort words in cell left-to-right, top-to-bottom
-                    const cellWords = cellGroups[key].sort((a, b) => {
-                        if (Math.abs(a.bbox.y0 - b.bbox.y0) < 10) {
-                            return a.bbox.x0 - b.bbox.x0;
-                        }
-                        return a.bbox.y0 - b.bbox.y0;
+                        
+                        // Match hour headers: "8:00", "9:00", "10:00", "11:00", "12:00", "1:00", "2:00", "3:00", "4:00", "5:00", "6:00"
+                        if (/^8[:.]00/.test(text) || text === "8:00" || text === "8.00") hoursX[8] = cx;
+                        else if (/^9[:.]00/.test(text) || text === "9:00" || text === "9.00") hoursX[9] = cx;
+                        else if (/^10[:.]00/.test(text) || text === "10:00" || text === "10.00") hoursX[10] = cx;
+                        else if (/^11[:.]00/.test(text) || text === "11:00" || text === "11.00") hoursX[11] = cx;
+                        else if (/^12[:.]00/.test(text) || text === "12:00" || text === "12.00") hoursX[12] = cx;
+                        else if (/^1[:.]00/.test(text) || text === "1:00" || text === "1.00") hoursX[13] = cx;
+                        else if (/^2[:.]00/.test(text) || text === "2:00" || text === "2.00") hoursX[14] = cx;
+                        else if (/^3[:.]00/.test(text) || text === "3:00" || text === "3.00") hoursX[15] = cx;
+                        else if (/^4[:.]00/.test(text) || text === "4:00" || text === "4.00") hoursX[16] = cx;
+                        else if (/^5[:.]00/.test(text) || text === "5:00" || text === "5.00") hoursX[17] = cx;
                     });
                     
-                    let cellText = cellWords.map(w => w.text).join(" ").trim();
-                    cellText = cellText.replace(/\s+/g, ' ');
+                    // Interpolation for missing hour columns coordinates
+                    const detectedHours = Object.keys(hoursX).map(Number).sort((a,b)=>a-b);
+                    if (detectedHours.length >= 2) {
+                        const firstH = detectedHours[0];
+                        const lastH = detectedHours[detectedHours.length - 1];
+                        const firstX = hoursX[firstH];
+                        const lastX = hoursX[lastH];
+                        const avgWidth = (lastX - firstX) / (lastH - firstH);
+                        for (let h = 8; h <= 17; h++) {
+                            if (hoursX[h] === undefined) {
+                                hoursX[h] = firstX + (h - firstH) * avgWidth;
+                            }
+                        }
+                    } else {
+                        showToast("Jadual disimpan sebagai rujukan visual (Koordinat jam tidak dikesan untuk imbasan automatik).", "warning");
+                        return;
+                    }
                     
-                    // Course code pattern filter
-                    const hasCourseCode = /[A-Z]{3,4}\d{4,5}/i.test(cellText) || /\bPA\b/i.test(cellText) || /\bPENASIHAT\b/i.test(cellText);
+                    // Interpolation for Day Y-coordinates
+                    const dayYArray = [yIsnin, ySelasa, yRabu, yKhamis, yJumaat];
+                    const detectedDays = [];
+                    dayYArray.forEach((y, i) => { if (y !== null) detectedDays.push({ index: i + 1, y: y }); });
                     
-                    if (hasCourseCode) {
-                        const noiseFilter = ["isnin", "selasa", "rabu", "khamis", "jumaat", "8:00", "9:00", "10:00", "11:00", "12:00", "1:00", "2:00", "3:00", "4:00", "5:00", "6:00"];
-                        noiseFilter.forEach(nf => {
-                            const reg = new RegExp("\\b" + nf + "\\b", "gi");
-                            cellText = cellText.replace(reg, "");
-                        });
-                        cellText = cellText.trim();
+                    if (detectedDays.length >= 1) {
+                        let avgRowHeight = 70; // default estimate
+                        if (detectedDays.length >= 2) {
+                            const firstD = detectedDays[0];
+                            const lastD = detectedDays[detectedDays.length - 1];
+                            avgRowHeight = (lastD.y - firstD.y) / (lastD.index - firstD.index);
+                        }
+                        const ref = detectedDays[0];
+                        yIsnin = ref.y - (ref.index - 1) * avgRowHeight;
+                        ySelasa = ref.y - (ref.index - 2) * avgRowHeight;
+                        yRabu = ref.y - (ref.index - 3) * avgRowHeight;
+                        yKhamis = ref.y - (ref.index - 4) * avgRowHeight;
+                        yJumaat = ref.y - (ref.index - 5) * avgRowHeight;
+                    } else {
+                        showToast("Jadual disimpan sebagai rujukan visual (Koordinat hari tidak dikesan untuk imbasan automatik).", "warning");
+                        return;
+                    }
+                    
+                    const daysY = { 1: yIsnin, 2: ySelasa, 3: yRabu, 4: yKhamis, 5: yJumaat };
+                    const rowHeight = (yJumaat - yIsnin) / 4;
+                    const colWidth = (hoursX[17] - hoursX[8]) / 9;
+                    
+                    // Group words into cells
+                    const cellGroups = {};
+                    
+                    words.forEach(w => {
+                        const cx = (w.bbox.x0 + w.bbox.x1) / 2;
+                        const cy = (w.bbox.y0 + w.bbox.y1) / 2;
                         
-                        if (cellText.length > 2) {
-                            newTimetable[d][h] = {
-                                task: "Pelaksanaan Kelas",
-                                info: cellText
-                            };
-                            detectedCount++;
+                        let dayIndex = null;
+                        for (let d = 1; d <= 5; d++) {
+                            if (Math.abs(cy - daysY[d]) < rowHeight * 0.45) {
+                                dayIndex = d;
+                                break;
+                            }
+                        }
+                        
+                        let hourIndex = null;
+                        for (let h = 8; h <= 16; h++) {
+                            const xStart = hoursX[h];
+                            const xEnd = hoursX[h+1];
+                            if (cx >= xStart - colWidth*0.15 && cx <= xEnd + colWidth*0.15) {
+                                hourIndex = h;
+                                break;
+                            }
+                        }
+                        
+                        if (dayIndex && hourIndex) {
+                            const key = `${dayIndex}_${hourIndex}`;
+                            if (!cellGroups[key]) cellGroups[key] = [];
+                            cellGroups[key].push(w);
+                        }
+                    });
+                    
+                    // Reconstruct the new timetable state
+                    const newTimetable = { 1: {}, 2: {}, 3: {}, 4: {}, 5: {} };
+                    let detectedCount = 0;
+                    
+                    for (let key in cellGroups) {
+                        const [d, h] = key.split("_").map(Number);
+                        
+                        // Sort words in cell left-to-right, top-to-bottom
+                        const cellWords = cellGroups[key].sort((a, b) => {
+                            if (Math.abs(a.bbox.y0 - b.bbox.y0) < 10) {
+                                return a.bbox.x0 - b.bbox.x0;
+                            }
+                            return a.bbox.y0 - b.bbox.y0;
+                        });
+                        
+                        let cellText = cellWords.map(w => w.text).join(" ").trim();
+                        cellText = cellText.replace(/\s+/g, ' ');
+                        
+                        // Course code pattern filter
+                        const hasCourseCode = /[A-Z]{3,4}\d{4,5}/i.test(cellText) || /\bPA\b/i.test(cellText) || /\bPENASIHAT\b/i.test(cellText);
+                        
+                        if (hasCourseCode) {
+                            const noiseFilter = ["isnin", "selasa", "rabu", "khamis", "jumaat", "8:00", "9:00", "10:00", "11:00", "12:00", "1:00", "2:00", "3:00", "4:00", "5:00", "6:00"];
+                            noiseFilter.forEach(nf => {
+                                const reg = new RegExp("\\b" + nf + "\\b", "gi");
+                                cellText = cellText.replace(reg, "");
+                            });
+                            cellText = cellText.trim();
+                            
+                            if (cellText.length > 2) {
+                                newTimetable[d][h] = {
+                                    task: "Pelaksanaan Kelas",
+                                    info: cellText
+                                };
+                                detectedCount++;
+                            }
                         }
                     }
-                }
-                
-                if (detectedCount > 0) {
-                    state.timetable = newTimetable;
-                    localStorage.setItem("bdr_timetable", JSON.stringify(state.timetable));
-                    syncLogsWithActiveTimetable();
                     
-                    // Save image as visual reference too
-                    const reader = new FileReader();
-                    reader.onload = (e) => {
-                        state.visualTimetable = {
-                            type: 'image',
-                            data: e.target.result
-                        };
-                        localStorage.setItem("bdr_visual_timetable", JSON.stringify(state.visualTimetable));
+                    if (detectedCount > 0) {
+                        state.timetable = newTimetable;
+                        localStorage.setItem("bdr_timetable", JSON.stringify(state.timetable));
+                        syncLogsWithActiveTimetable();
                         updateTimetableStatus();
-                        checkVisualTimetableBtn();
                         loadActiveDateLog();
                         showToast(`Jadual waktu berjaya diimbas! (Dikesan: ${detectedCount} slot kuliah aktif).`);
-                    };
-                    reader.readAsDataURL(file);
-                } else {
-                    showToast("Tiada slot jadual waktu kuliah sah dikesan dalam gambar. Cuba muat naik gambar yang lebih jelas.", "warning");
-                }
-            }).catch(err => {
-                if (loadingOverlay) loadingOverlay.classList.add("hidden");
-                console.error("Tesseract Error:", err);
-                showToast("Gagal mengimbas gambar jadual waktu. Sila pastikan sambungan internet aktif untuk memuat turun enjin imbasan.", "danger");
-            });
+                    } else {
+                        showToast("Jadual disimpan sebagai rujukan visual (Teks subjek tidak dikesan).", "warning");
+                    }
+                }).catch(err => {
+                    if (loadingOverlay) loadingOverlay.classList.add("hidden");
+                    console.error("Tesseract Error:", err);
+                    showToast("Imbasan teks gagal, namun gambar jadual disimpan sebagai rujukan visual.", "warning");
+                });
+            };
+            reader.readAsDataURL(file);
         }
     }
     // 3. Unsupported format
